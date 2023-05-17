@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.random import binomial, choice
+import itertools
 
 class RandomGraph:
     def __init__(self, out_adj_list=None, undirected=True):
@@ -63,31 +64,40 @@ def BA(out_adj_list, in_adj_list, m=2):
 
 def count_triangles(out_adj_list, in_adj_list):
     num_triangles = 0
-    for n1 in out_adj_list:
-        for n2 in out_adj_list[n1]:
-            for n3 in out_adj_list[n2]:
-                num_triangles += int(n1 in out_adj_list[n3])
+    for subset in itertools.combinations(list(range(num_nodes)), 3):
+        n1, n2, n3 = subset
+        if n2 in out_adj_list[n1] and n3 in out_adj_list[n2] and n1 in out_adj_list[n3]:
+            num_triangles += 1
     return num_triangles
 
 def pr(G, stat, n=1000):
     for _ in range(n):
         G.sample(stat)
     values, counts = np.unique(G.samples, return_counts=True)
-    dist = counts / np.sum(counts)
+    dist = counts / n
     return (values, dist)
 
-num_nodes = 100
-G = RandomGraph()
-for t in range(num_nodes):
-    G.operate(BA)
-print(pr(G, count_triangles))
+num_nodes = 20
+# G = RandomGraph()
+# for t in range(num_nodes):
+#     G.operate(BA)
+# print(pr(G, count_triangles))
 
-p = 0.5
+p = 0.75
+q = 0.25
 prob_adj_list = {
     n : [] for n in range(num_nodes)
 }
 for source in range(num_nodes):
     for target in range(source + 1, num_nodes):
-        prob_adj_list[source].append((target, p))
+        if source < num_nodes // 2 and target < num_nodes // 2:
+            prob = p
+        elif source >= num_nodes // 2 and target >= num_nodes // 2:
+            prob = p
+        else:
+            prob = q
+
+        prob_adj_list[source].append((target, prob))
 G = RandomGraph(prob_adj_list)
-print(pr(G, count_triangles))
+values, dist = pr(G, count_triangles)
+print(np.dot(values, dist))
