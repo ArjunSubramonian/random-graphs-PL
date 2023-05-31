@@ -1,5 +1,8 @@
+"""
+Module for experimenting with logical formula compilation of clique-counting. Broadly, we generate a DNF representing triangle counting (for an arbitrary graph), perform a Tseitin transform to convert it to a CNF, and then output it in DIMACS form.
+"""
+
 from argparse import ArgumentParser
-from math import comb
 
 
 def ordered_edges(num_nodes):
@@ -20,9 +23,9 @@ def ordered_edges(num_nodes):
     return order, edge_indices
 
 
-def triangle_cnf(num_nodes):
+def triangle_dnf(num_nodes):
     """
-    Returns a CNF where each clause is a possible triangle in
+    Returns a DNF where each clause is a possible triangle in
     a graph of size num_nodes.
     Every atom is an index into ordered_edges.
     """
@@ -37,12 +40,44 @@ def triangle_cnf(num_nodes):
     return out
 
 
-def to_dimacs_file(fname, num_vars, clauses):
+def triangle_cnf(num_nodes):
+    """
+    Returns a DNF where each clause is a possible triangle in
+    a graph of size num_nodes.
+    Every atom is an index into ordered_edges. Requires a DNF -> CNF conversion, which is non-trivial.
+    """
+    return tseitin(triangle_dnf(num_nodes))
+
+
+def tseitin(dnf):
+    """
+    Transformation from DNF -> CNF; see https://en.wikipedia.org/wiki/Tseytin_transformation
+
+    Inspired by: https://github.com/Mihiro1ll1/ConvertCNF/blob/master/Tseitin.py
+    """
+
+    largest_var = max(max(abs(atom) for atom in term) for term in dnf)
+    next_var = largest_var + 1
+
+    ans = []
+
+    for term in dnf:
+        ans.append([-1 * term[j] for j in range(len(term))] + [next_var])
+        for atom in term:
+            ans.append([atom, -1 * next_var])
+        next_var += 1
+
+    return ans
+
+
+def to_dimacs_file(fname, clauses):
     """
     Handles writing to a DIMACS-format file, including adding the correct header
     and formatting each clause (1-indexing, 0 terminator).
     """
-    header = [f"p cnf {num_vars} {len(clauses)}"]
+    largest_var = max(max(abs(atom) for atom in clause) for clause in clauses)
+
+    header = [f"p cnf {largest_var} {len(clauses)}"]
     formatted_clauses = [
         f"{' '.join([str(a + 1) for a in clause])} 0" for clause in clauses
     ]
@@ -51,6 +86,9 @@ def to_dimacs_file(fname, num_vars, clauses):
 
 
 def main():
+    """
+    Main driver (parses args, etc.)
+    """
     parser = ArgumentParser(
         prog="cnfgen",
         description="Generates a CNF representing triangle counting for a graph.",
@@ -61,7 +99,7 @@ def main():
 
     args = parser.parse_args()
 
-    to_dimacs_file(args.file, comb(args.nodes, 2), triangle_cnf(args.nodes))
+    to_dimacs_file(args.file, triangle_cnf(args.nodes))
 
 
 if __name__ == "__main__":
