@@ -7,50 +7,13 @@ Original file is located at
     https://colab.research.google.com/drive/1GM46arsndPuJeVyBhkphuYlVDydL2A0b
 """
 
+# !pip install torch-geometric
+
 import torch
-
-N = 1000
-p = 0.01
-L = int(p * N * N)
-
 from torch.distributions.categorical import Categorical
-m = Categorical(torch.ones(N) / N)
-
-perm = torch.randperm(N * N)
-idx = perm[:L // 2]
-edge_index = torch.zeros((2, L)).long()
-for pos, i in enumerate(idx):
-    u = i // N
-    v = i % N
-    edge_index[0, 2 * pos] = u
-    edge_index[1, 2 * pos] = v
-    edge_index[0, 2 * pos + 1] = v
-    edge_index[1, 2 * pos + 1] = u
-
-from torch_geometric.utils import coalesce, remove_self_loops
-edge_index = coalesce(edge_index)
-edge_index, _ = remove_self_loops(edge_index)
-print(edge_index.size())
-
-from torch_geometric.utils import is_undirected
-is_undirected(edge_index)
-
-# from torch_geometric.utils import to_undirected
-# A_flat = torch.zeros((N * N,))
-# A_flat[idx] = 1
-# edge_index_test = to_undirected(A_flat.reshape(N, N).nonzero().t(), num_nodes=N)
-# print(edge_index_test.size())
-# (edge_index == edge_index_test).all()
-
 from torch_geometric.utils import degree
-deg = degree(edge_index[0])
-
-sigma = (deg ** 2).sum().item()
-print(sigma)
-
-running_num_triangles = 0
-
 from torch_geometric.utils import to_torch_coo_tensor, to_dense_adj
+import numpy as np
 
 def count_triangles(edge_index):
     sp_edge_index = to_torch_coo_tensor(edge_index)
@@ -64,105 +27,175 @@ def count_triangles(edge_index):
     mask = idx[0] == idx[1]
     return vals[mask].sum() / 6
 
-num_triangles = count_triangles(edge_index)
-true_count = num_triangles
-delta_ij = 0
-delta_ik = 0
+import time
+import signal
 
-ei = edge_index.clone()
+class TimeoutException(Exception):   # Custom exception class
+    pass
 
-# running_num_triangles = 0
-running_num_triangles_test = 0
+def timeout_handler(signum, frame):   # Custom signal handler
+    raise TimeoutException
 
-for t in range(1, 1001):
+# Change the behavior of SIGALRM
+signal.signal(signal.SIGALRM, timeout_handler)
 
-    # running_num_triangles += (true_count - running_num_triangles) / t
-    running_num_triangles_test += (num_triangles - running_num_triangles_test) / t
-    if t % 100 == 0:
-        # print(running_num_triangles)
-        print(running_num_triangles_test)
+for num_nodes_step in range(2, 16):
+    N = 2 ** num_nodes_step
+    print('num nodes = {}'.format(N))
 
-    while True:
-        i, j = ei[:, torch.randint(ei.size(1), (1,))[0]]
-        i = i.item()
-        j = j.item()
-        assert ((ei[0] == j) & (ei[1] == i)).any()
-        
-        node_dist = torch.ones(N)
-        node_dist[i] = 0
-        node_dist[j] = 0
-        k = node_dist.multinomial(1)[0]
-        k = k.item()
+    times = []
+    for p_step in range(2, 11):
+        p = 0.1 * p_step
+        L = int(p * N * N)
 
-        if (k != ei[1, ei[0] == i]).all():
-            break
+        print('number of links = {}'.format(L))
 
-    sigma_prime = (sigma + 2 * (1 + deg[k] - deg[j])).item()
-    p_execute_move = ((N - 1) * L - sigma) * torch.exp(m.log_prob(deg[j] - 1)) * torch.exp(m.log_prob(deg[k] + 1)) * (deg[k] + 1)
-    p_execute_move /= ((N - 1) * L - sigma_prime) * torch.exp(m.log_prob(deg[j])) * torch.exp(m.log_prob(deg[k])) * deg[j]
-    r = torch.rand(1)[0].item()
-    if r < p_execute_move.item():
-        pos_1 = (ei[0] == i) & (ei[1] == j)
-        # print(i, j, ei[:, pos_1])
+        signal.alarm(60)  # time out after a minute
+        start_time = time.time()
 
-        pos_2 = (ei[0] == j) & (ei[1] == i)
-        # print(i, j, ei[:, pos_2])
+        try:
+            m = Categorical(torch.ones(N) / N)
 
-        adj_i_1 = ei[1, ei[0] == i]
-        adj_j = ei[1, ei[0] == j]
+            perm = torch.randperm(N * N)
+            idx = perm[:L // 2]
+            edge_index = torch.zeros((2, L)).long()
+            for pos, i in enumerate(idx):
+                u = i // N
+                v = i % N
+                edge_index[0, 2 * pos] = u
+                edge_index[1, 2 * pos] = v
+                edge_index[0, 2 * pos + 1] = v
+                edge_index[1, 2 * pos + 1] = u
 
-        ei[1, pos_1] = k
-        # print(i, k, ei[:, pos_1])
+            from torch_geometric.utils import coalesce, remove_self_loops
+            edge_index = coalesce(edge_index)
+            edge_index, _ = remove_self_loops(edge_index)
+            # print(edge_index.size())
 
-        ei[0, pos_2] = k
-        # print(k, i, ei[:, pos_2])
+            # from torch_geometric.utils import is_undirected
+            # is_undirected(edge_index)
 
-        sigma = sigma_prime
+            # from torch_geometric.utils import to_undirected
+            # A_flat = torch.zeros((N * N,))
+            # A_flat[idx] = 1
+            # edge_index_test = to_undirected(A_flat.reshape(N, N).nonzero().t(), num_nodes=N)
+            # print(edge_index_test.size())
+            # (edge_index == edge_index_test).all()
 
-        deg[k] += 1
-        deg[j] -= 1
+            deg = degree(edge_index[0], num_nodes=N)
+            sigma = (deg ** 2).sum().item()
+            # print(sigma)
 
-        adj_i_2 = ei[1, ei[0] == i]
-        adj_k = ei[1, ei[0] == k]
+            num_triangles = count_triangles(edge_index)
+            true_count = num_triangles
+            delta_ij = 0
+            delta_ik = 0
 
-        delta_ij = -(adj_i_1.reshape(-1, 1) == adj_j).sum()
-        delta_ik = (adj_i_2.reshape(-1, 1) == adj_k).sum()
-        num_triangles += delta_ik + delta_ij
+            ei = edge_index.clone()
 
-        # assert i != j
-        # assert j != i
-        # assert j != k
-        # assert k != i
+            # running_num_triangles = 0
+            running_num_triangles_test = 0
 
-        # prev_count = true_count
-        # true_count = count_triangles(ei)
-        # if true_count - prev_count != delta_ij + delta_ik:
-        #     print(prev_count, true_count, delta_ij, delta_ik)
-        #     print(i, j, k)
-        #     print(adj_i_1, adj_j)
-        #     print(adj_i_2, adj_k)
-        #     print()
+            for t in range(1, 1001):
 
-running_num_triangles_test
+                # running_num_triangles += (true_count - running_num_triangles) / t
+                running_num_triangles_test += (num_triangles - running_num_triangles_test) / t
+                if t % 100 == 0:
+                    # print(running_num_triangles)
+                    # print(running_num_triangles_test)
+                    pass
 
-import math
-N = 1000
-p = 0.25
-L = int(p * N * N)
-lam = L / (N * (N - 1) / 2 - L)
-A = torch.zeros((N, N)).long()
+                while True:
+                    i, j = ei[:, torch.randint(ei.size(1), (1,))[0]]
+                    i = i.item()
+                    j = j.item()
+                    assert ((ei[0] == j) & (ei[1] == i)).any()
+                    
+                    node_dist = torch.ones(N)
+                    node_dist[i] = 0
+                    node_dist[j] = 0
+                    k = node_dist.multinomial(1)[0]
+                    k = k.item()
 
-for t in range(1, 1001):
-    i, j = torch.randperm(N)[:2]
-    if A[i, j] == 0:
-        prob_execute_move = min(1, lam)
-    else:
-        prob_execute_move = min(1, 1 / lam)
+                    if (k != ei[1, ei[0] == i]).all():
+                        break
+
+                sigma_prime = (sigma + 2 * (1 + deg[k] - deg[j])).item()
+                p_execute_move = ((N - 1) * L - sigma) * torch.exp(m.log_prob(deg[j] - 1)) * torch.exp(m.log_prob(deg[k] + 1)) * (deg[k] + 1)
+                p_execute_move /= ((N - 1) * L - sigma_prime) * torch.exp(m.log_prob(deg[j])) * torch.exp(m.log_prob(deg[k])) * deg[j]
+                r = torch.rand(1)[0].item()
+                if r < p_execute_move.item():
+                    pos_1 = (ei[0] == i) & (ei[1] == j)
+                    # print(i, j, ei[:, pos_1])
+
+                    pos_2 = (ei[0] == j) & (ei[1] == i)
+                    # print(i, j, ei[:, pos_2])
+
+                    adj_i_1 = ei[1, ei[0] == i]
+                    adj_j = ei[1, ei[0] == j]
+
+                    ei[1, pos_1] = k
+                    # print(i, k, ei[:, pos_1])
+
+                    ei[0, pos_2] = k
+                    # print(k, i, ei[:, pos_2])
+
+                    sigma = sigma_prime
+
+                    deg[k] += 1
+                    deg[j] -= 1
+
+                    adj_i_2 = ei[1, ei[0] == i]
+                    adj_k = ei[1, ei[0] == k]
+
+                    delta_ij = -(adj_i_1.reshape(-1, 1) == adj_j).sum()
+                    delta_ik = (adj_i_2.reshape(-1, 1) == adj_k).sum()
+                    num_triangles += delta_ik + delta_ij
+
+                    # assert i != j
+                    # assert j != i
+                    # assert j != k
+                    # assert k != i
+
+                    # prev_count = true_count
+                    # true_count = count_triangles(ei)
+                    # if true_count - prev_count != delta_ij + delta_ik:
+                    #     print(prev_count, true_count, delta_ij, delta_ik)
+                    #     print(i, j, k)
+                    #     print(adj_i_1, adj_j)
+                    #     print(adj_i_2, adj_k)
+                    #     print()
+        except TimeoutException:
+            print("Took too long!")
+            pass
+        else:
+            # Reset the alarm
+            signal.alarm(0)
+
+        # print(running_num_triangles_test)
+
+        time_elapsed = time.time() - start_time
+        times.append(time_elapsed)
+
+    print()
+    print("time taken:", str(np.mean(np.array(times))) + " ± " + str(np.std(np.array(times))))
+    print()
+
+# import math
+# N = 1000
+# p = 0.25
+# L = int(p * N * N)
+# lam = L / (N * (N - 1) / 2 - L)
+# A = torch.zeros((N, N)).long()
+
+# for t in range(1, 1001):
+#     i, j = torch.randperm(N)[:2]
+#     if A[i, j] == 0:
+#         prob_execute_move = min(1, lam)
+#     else:
+#         prob_execute_move = min(1, 1 / lam)
     
-    r = torch.rand(1)[0].item()
-    if r < prob_execute_move:
-        A[i, j] = 1 - A[i, j]
-        A[j, i] = 1 - A[j, i]
-
-A.sum()
-
+#     r = torch.rand(1)[0].item()
+#     if r < prob_execute_move:
+#         A[i, j] = 1 - A[i, j]
+#         A[j, i] = 1 - A[j, i]
