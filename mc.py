@@ -1,6 +1,18 @@
 import numpy as np
 from numpy.random import binomial, choice
 import itertools
+import time
+
+import signal
+
+class TimeoutException(Exception):   # Custom exception class
+    pass
+
+def timeout_handler(signum, frame):   # Custom signal handler
+    raise TimeoutException
+
+# Change the behavior of SIGALRM
+signal.signal(signal.SIGALRM, timeout_handler)
 
 class RandomGraph:
     def __init__(self, out_adj_list=None, undirected=True):
@@ -77,27 +89,52 @@ def pr(G, stat, n=1000):
     dist = counts / n
     return (values, dist)
 
-num_nodes = 20
+# num_nodes = 20
 # G = RandomGraph()
 # for t in range(num_nodes):
 #     G.operate(BA)
 # print(pr(G, count_triangles))
 
-p = 0.75
-q = 0.25
-prob_adj_list = {
-    n : [] for n in range(num_nodes)
-}
-for source in range(num_nodes):
-    for target in range(source + 1, num_nodes):
-        if source < num_nodes // 2 and target < num_nodes // 2:
-            prob = p
-        elif source >= num_nodes // 2 and target >= num_nodes // 2:
-            prob = p
-        else:
-            prob = q
+for num_nodes_step in range(1, 16):
+    num_nodes = 2 ** num_nodes_step
+    print('num nodes = {}'.format(num_nodes))
 
-        prob_adj_list[source].append((target, prob))
-G = RandomGraph(prob_adj_list)
-values, dist = pr(G, count_triangles)
-print(np.dot(values, dist))
+    times = []
+    for p_step in range(1, 6):
+        p = 0.2 * p_step
+        for q_step in range(1, 6):
+            q = 0.2 * q_step
+            print('p = {}'.format(p), 'q = {}'.format(q))
+
+            signal.alarm(60)  # time out after a minute
+            start_time = time.time()
+            try:
+                prob_adj_list = {
+                    n : [] for n in range(num_nodes)
+                }
+                for source in range(num_nodes):
+                    for target in range(source + 1, num_nodes):
+                        if source < num_nodes // 2 and target < num_nodes // 2:
+                            prob = p
+                        elif source >= num_nodes // 2 and target >= num_nodes // 2:
+                            prob = p
+                        else:
+                            prob = q
+
+                        prob_adj_list[source].append((target, prob))
+
+                G = RandomGraph(prob_adj_list)
+                values, dist = pr(G, count_triangles)
+                # print(np.dot(values, dist))
+            except TimeoutException:
+                pass
+            else:
+                # Reset the alarm
+                signal.alarm(0)
+
+            time_elapsed = time.time() - start_time
+            times.append(time_elapsed)
+
+    print()
+    print("time taken:", str(np.mean(np.array(times))) + " ± " + str(np.std(np.array(times))))
+    print()
