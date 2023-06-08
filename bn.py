@@ -19,25 +19,35 @@ import numpy as np
 import time
 import signal
 
-class TimeoutException(Exception):   # Custom exception class
+import sys
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+class TimeoutException(Exception):  # Custom exception class
     pass
 
-def timeout_handler(signum, frame):   # Custom signal handler
+
+def timeout_handler(signum, frame):  # Custom signal handler
     raise TimeoutException
+
 
 # Change the behavior of SIGALRM
 signal.signal(signal.SIGALRM, timeout_handler)
 
-for num_nodes_step in range(1, 16):
-    num_nodes = 2 ** num_nodes_step
-    print('num nodes = {}'.format(num_nodes))
+print("[")
+for num_nodes_step in range(1, 7):
+    num_nodes = 2**num_nodes_step
+    eprint("num nodes = {}".format(num_nodes))
 
     times = []
     for p_step in range(1, 6):
         p = 0.2 * p_step
         for q_step in range(1, 6):
             q = 0.2 * q_step
-            print('p = {}'.format(p), 'q = {}'.format(q))
+            eprint("p = {}".format(p), "q = {}".format(q))
 
             signal.alarm(60)  # time out after a minute
             start_time = time.time()
@@ -63,25 +73,27 @@ for num_nodes_step in range(1, 16):
                         cpds[edge_node] = TabularCPD(
                             variable=edge_node,
                             variable_card=2,
-                            values=[[1 - prob], [prob]]
+                            values=[[1 - prob], [prob]],
                         )
                         evidence.append(edge_node)
 
                     cpds[tri_node] = TabularCPD(
                         variable=tri_node,
                         variable_card=2,
-                        values=[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]],
+                        values=[
+                            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
+                            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                        ],
                         evidence=evidence,
                         evidence_card=[2, 2, 2],
                     )
 
                     for edge_node in evidence:
                         edges.append((edge_node, tri_node))
-                    
 
                 graph_model = BayesianNetwork(edges)
                 graph_model.add_cpds(*list(cpds.values()))
-                # print(graph_model.check_model())
+                # eprint(graph_model.check_model())
 
                 graph_infer = VariableElimination(graph_model)
 
@@ -101,14 +113,14 @@ for num_nodes_step in range(1, 16):
                     else:
                         # expected_triangles += 1
                         pass
-                # print(expected_triangles)
+                # eprint(expected_triangles)
 
                 # graph_model.local_independencies("0_1_2")
                 # len(list(itertools.combinations(list(range(num_nodes)), 3)))
                 # infer = ApproxInference(graph_model)
                 # infer.query(variables=vars, joint=False)
             except TimeoutException:
-                print("Took too long!")
+                eprint("Took too long!")
                 pass
             else:
                 # Reset the alarm
@@ -117,7 +129,15 @@ for num_nodes_step in range(1, 16):
             time_elapsed = time.time() - start_time
             times.append(time_elapsed)
 
-    print()
-    print("time taken:", str(np.mean(np.array(times))) + " ± " + str(np.std(np.array(times))))
-    print()
+    eprint()
+    eprint(
+        "time taken:",
+        str(np.mean(np.array(times))) + " ± " + str(np.std(np.array(times))),
+    )
+    eprint()
 
+    print(
+        f'{{  "n": {num_nodes}, "mean": {str(np.mean(np.array(times)))}, "std": {str(np.std(np.array(times)))}, "times": {times} }},'
+    )
+
+print("]")

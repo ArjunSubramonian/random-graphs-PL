@@ -15,6 +15,13 @@ from torch_geometric.utils import degree
 from torch_geometric.utils import to_torch_coo_tensor, to_dense_adj
 import numpy as np
 
+import sys
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
 def count_triangles(edge_index):
     sp_edge_index = to_torch_coo_tensor(edge_index)
     mp = torch.sparse.mm(torch.sparse.mm(sp_edge_index, sp_edge_index), sp_edge_index)
@@ -22,33 +29,39 @@ def count_triangles(edge_index):
     vals = mp.values()
 
     # A = to_dense_adj(edge_index)[0]
-    # print(torch.trace(A @ A @ A))
-    
+    # eprint(torch.trace(A @ A @ A))
+
     mask = idx[0] == idx[1]
     return vals[mask].sum() / 6
+
 
 import time
 import signal
 
-class TimeoutException(Exception):   # Custom exception class
+
+class TimeoutException(Exception):  # Custom exception class
     pass
 
-def timeout_handler(signum, frame):   # Custom signal handler
+
+def timeout_handler(signum, frame):  # Custom signal handler
     raise TimeoutException
+
 
 # Change the behavior of SIGALRM
 signal.signal(signal.SIGALRM, timeout_handler)
 
-for num_nodes_step in range(2, 16):
-    N = 2 ** num_nodes_step
-    print('num nodes = {}'.format(N))
+print("[")
+
+for num_nodes_step in range(2, 10):
+    N = 2**num_nodes_step
+    eprint("num nodes = {}".format(N))
 
     times = []
     for p_step in range(2, 11):
         p = 0.1 * p_step
         L = int(p * N * N)
 
-        print('number of links = {}'.format(L))
+        eprint("number of links = {}".format(L))
 
         signal.alarm(60)  # time out after a minute
         start_time = time.time()
@@ -57,7 +70,7 @@ for num_nodes_step in range(2, 16):
             m = Categorical(torch.ones(N) / N)
 
             perm = torch.randperm(N * N)
-            idx = perm[:L // 2]
+            idx = perm[: L // 2]
             edge_index = torch.zeros((2, L)).long()
             for pos, i in enumerate(idx):
                 u = i // N
@@ -68,9 +81,10 @@ for num_nodes_step in range(2, 16):
                 edge_index[1, 2 * pos + 1] = u
 
             from torch_geometric.utils import coalesce, remove_self_loops
+
             edge_index = coalesce(edge_index)
             edge_index, _ = remove_self_loops(edge_index)
-            # print(edge_index.size())
+            # eprint(edge_index.size())
 
             # from torch_geometric.utils import is_undirected
             # is_undirected(edge_index)
@@ -79,12 +93,12 @@ for num_nodes_step in range(2, 16):
             # A_flat = torch.zeros((N * N,))
             # A_flat[idx] = 1
             # edge_index_test = to_undirected(A_flat.reshape(N, N).nonzero().t(), num_nodes=N)
-            # print(edge_index_test.size())
+            # eprint(edge_index_test.size())
             # (edge_index == edge_index_test).all()
 
             deg = degree(edge_index[0], num_nodes=N)
-            sigma = (deg ** 2).sum().item()
-            # print(sigma)
+            sigma = (deg**2).sum().item()
+            # eprint(sigma)
 
             num_triangles = count_triangles(edge_index)
             true_count = num_triangles
@@ -97,12 +111,13 @@ for num_nodes_step in range(2, 16):
             running_num_triangles_test = 0
 
             for t in range(1, 1001):
-
                 # running_num_triangles += (true_count - running_num_triangles) / t
-                running_num_triangles_test += (num_triangles - running_num_triangles_test) / t
+                running_num_triangles_test += (
+                    num_triangles - running_num_triangles_test
+                ) / t
                 if t % 100 == 0:
-                    # print(running_num_triangles)
-                    # print(running_num_triangles_test)
+                    # eprint(running_num_triangles)
+                    # eprint(running_num_triangles_test)
                     pass
 
                 while True:
@@ -110,7 +125,7 @@ for num_nodes_step in range(2, 16):
                     i = i.item()
                     j = j.item()
                     assert ((ei[0] == j) & (ei[1] == i)).any()
-                    
+
                     node_dist = torch.ones(N)
                     node_dist[i] = 0
                     node_dist[j] = 0
@@ -121,24 +136,34 @@ for num_nodes_step in range(2, 16):
                         break
 
                 sigma_prime = (sigma + 2 * (1 + deg[k] - deg[j])).item()
-                p_execute_move = ((N - 1) * L - sigma) * torch.exp(m.log_prob(deg[j] - 1)) * torch.exp(m.log_prob(deg[k] + 1)) * (deg[k] + 1)
-                p_execute_move /= ((N - 1) * L - sigma_prime) * torch.exp(m.log_prob(deg[j])) * torch.exp(m.log_prob(deg[k])) * deg[j]
+                p_execute_move = (
+                    ((N - 1) * L - sigma)
+                    * torch.exp(m.log_prob(deg[j] - 1))
+                    * torch.exp(m.log_prob(deg[k] + 1))
+                    * (deg[k] + 1)
+                )
+                p_execute_move /= (
+                    ((N - 1) * L - sigma_prime)
+                    * torch.exp(m.log_prob(deg[j]))
+                    * torch.exp(m.log_prob(deg[k]))
+                    * deg[j]
+                )
                 r = torch.rand(1)[0].item()
                 if r < p_execute_move.item():
                     pos_1 = (ei[0] == i) & (ei[1] == j)
-                    # print(i, j, ei[:, pos_1])
+                    # eprint(i, j, ei[:, pos_1])
 
                     pos_2 = (ei[0] == j) & (ei[1] == i)
-                    # print(i, j, ei[:, pos_2])
+                    # eprint(i, j, ei[:, pos_2])
 
                     adj_i_1 = ei[1, ei[0] == i]
                     adj_j = ei[1, ei[0] == j]
 
                     ei[1, pos_1] = k
-                    # print(i, k, ei[:, pos_1])
+                    # eprint(i, k, ei[:, pos_1])
 
                     ei[0, pos_2] = k
-                    # print(k, i, ei[:, pos_2])
+                    # eprint(k, i, ei[:, pos_2])
 
                     sigma = sigma_prime
 
@@ -160,27 +185,34 @@ for num_nodes_step in range(2, 16):
                     # prev_count = true_count
                     # true_count = count_triangles(ei)
                     # if true_count - prev_count != delta_ij + delta_ik:
-                    #     print(prev_count, true_count, delta_ij, delta_ik)
-                    #     print(i, j, k)
-                    #     print(adj_i_1, adj_j)
-                    #     print(adj_i_2, adj_k)
-                    #     print()
+                    #     eprint(prev_count, true_count, delta_ij, delta_ik)
+                    #     eprint(i, j, k)
+                    #     eprint(adj_i_1, adj_j)
+                    #     eprint(adj_i_2, adj_k)
+                    #     eprint()
         except TimeoutException:
-            print("Took too long!")
+            eprint("Took too long!")
             pass
         else:
             # Reset the alarm
             signal.alarm(0)
 
-        # print(running_num_triangles_test)
+        # eprint(running_num_triangles_test)
 
         time_elapsed = time.time() - start_time
         times.append(time_elapsed)
 
-    print()
-    print("time taken:", str(np.mean(np.array(times))) + " ± " + str(np.std(np.array(times))))
-    print()
+    eprint()
+    eprint(
+        "time taken:",
+        str(np.mean(np.array(times))) + " ± " + str(np.std(np.array(times))),
+    )
+    eprint()
 
+    print(
+        f'{{  "n": {N}, "mean": {str(np.mean(np.array(times)))}, "std": {str(np.std(np.array(times)))}, "times": {times} }},'
+    )
+print("]")
 # import math
 # N = 1000
 # p = 0.25
@@ -194,7 +226,7 @@ for num_nodes_step in range(2, 16):
 #         prob_execute_move = min(1, lam)
 #     else:
 #         prob_execute_move = min(1, 1 / lam)
-    
+
 #     r = torch.rand(1)[0].item()
 #     if r < prob_execute_move:
 #         A[i, j] = 1 - A[i, j]
