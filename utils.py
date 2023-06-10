@@ -1,4 +1,6 @@
 import itertools
+import torch
+from torch_geometric.utils import to_torch_coo_tensor
 
 # assumes graph is directed
 def BA(out_adj_list, in_adj_list, m=2):
@@ -16,3 +18,13 @@ def count_triangles(out_adj_list, in_adj_list):
         if n2 in out_adj_list[n1] and n3 in out_adj_list[n2] and n1 in out_adj_list[n3]:
             num_triangles += 1
     return num_triangles
+
+# assumes graph is undirected
+def sp_count_triangles(edge_index):
+    sp_edge_index = to_torch_coo_tensor(edge_index)
+    mp = torch.sparse.mm(torch.sparse.mm(sp_edge_index, sp_edge_index), sp_edge_index)
+    idx = mp.indices()
+    vals = mp.values()
+
+    mask = idx[0] == idx[1]
+    return vals[mask].sum().item() / 6
