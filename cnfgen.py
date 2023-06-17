@@ -16,6 +16,36 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+class Propositional:
+    """
+    Weighted model count solver for triangle counting.
+    Currently doesn't work! I've pushed a version that enumerates the approach we tried.
+    """
+
+    def __init__(self, G):
+        self.clauses = triangle_cnf(G.num_nodes)
+        self.weights = []
+        # idea: initialize weights for edge clauses properly; but, the edge clauses aren't being tagged properly
+        # blocker: bug with how we're creating CNFs for exactly N triangles
+        raise NotImplementedError
+
+    def pr(self, G, use_cached=False):
+        # perform a WMC
+        raise NotImplementedError
+
+    def observe_edge(self, G, s, t):
+        # adjust the weight to be 1
+        raise NotImplementedError
+
+    def observe_no_edge(self, G, s, t):
+        # adjust the weight to be 0
+        raise NotImplementedError
+
+    def observe_triangle(self, G, a, b, c):
+        # call observe edge three times :)
+        raise NotImplementedError
+
+
 def ordered_edges(num_nodes):
     """
     Arbitrarily (but consistently) orders all edges in a graph of size num_nodes.
@@ -53,7 +83,7 @@ def triangle_dnf(num_nodes):
 
 def triangle_cnf(num_nodes):
     """
-    Returns a DNF where each clause is a possible triangle in
+    Returns a CNF where each clause is a possible triangle in
     a graph of size num_nodes.
     Every atom is an index into ordered_edges. Requires a DNF -> CNF conversion, which is non-trivial.
     """
