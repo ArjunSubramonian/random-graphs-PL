@@ -4,14 +4,23 @@ import signal
 import sys
 from utils import BA
 
+from mc import MonteCarlo
+from bn import BayesianNetwork
+from database import ProbabilisticDatabase
+from random_graph import SampleableRandomGraph
+
+
 def eprint(*args, **kwargs):
-    print(*args, file=sys.stdout, **kwargs)
+    print(*args, file=sys.stderr, **kwargs)
+
 
 class TimeoutException(Exception):  # Custom exception class
     pass
 
+
 def timeout_handler(signum, frame):  # Custom signal handler
     raise TimeoutException
+
 
 # Change the behavior of SIGALRM
 signal.signal(signal.SIGALRM, timeout_handler)
@@ -23,31 +32,29 @@ signal.signal(signal.SIGALRM, timeout_handler)
 # mc = MonteCarlo()
 # eprint(mc.pr(G))
 
-from mc import MonteCarlo
-from bn import BayesianNetwork
-from random_graph import SampleableRandomGraph
-
-for solver in [MonteCarlo(), BayesianNetwork()]:
-    if type(solver) == MonteCarlo:
+#
+for Solver in [
+    MonteCarlo,
+    BayesianNetwork,
+    # ProbabilisticDatabase
+]:
+    if Solver == BayesianNetwork:
+        kwargs = {"use_cached": True}
+    else:
         kwargs = {}
-    elif type(solver) == BayesianNetwork:
-        kwargs = {
-            "use_cached" : True
-        }
-    print(type(solver))
-    print(kwargs)
+    eprint(f"Solver: {Solver}, kwargs: {kwargs}")
 
     print("[")
     for num_nodes_step in range(2, 7):
         num_nodes = 2**num_nodes_step
-        eprint("num nodes = {}".format(num_nodes))
+        eprint(f"num nodes = {num_nodes}")
 
         times = []
         for p_step in range(1, 6):
             p = 0.2 * p_step
             for q_step in range(1, 6):
                 q = 0.2 * q_step
-                eprint("p = {}".format(p), "q = {}".format(q))
+                eprint(f"p = {p}, q = {q}")
 
                 signal.alarm(60)  # time out after a minute
                 start_time = time.time()
@@ -64,17 +71,24 @@ for solver in [MonteCarlo(), BayesianNetwork()]:
 
                             prob_adj_list[source][target] = prob
 
-                    G = SampleableRandomGraph(prob_adj_list)        
+                    G = SampleableRandomGraph(prob_adj_list)
+
+                    solver = Solver(G) if Solver == ProbabilisticDatabase else Solver()
+
                     dist = solver.pr(G)
-                    
-                    G.observe_edge(0, 1)
-                    dist = solver.pr(G, **kwargs)
+                    eprint(dist)
 
-                    G.observe_no_edge(0, 1)
+                    solver.observe_edge(G, 0, 1)
                     dist = solver.pr(G, **kwargs)
+                    eprint(dist)
 
-                    G.observe_triangle(0, 1, 2)
+                    solver.observe_no_edge(G, 0, 1)
                     dist = solver.pr(G, **kwargs)
+                    eprint(dist)
+
+                    solver.observe_triangle(G, 0, 1, 2)
+                    dist = solver.pr(G, **kwargs)
+                    eprint(dist)
                 except TimeoutException:
                     pass
                 else:
@@ -92,7 +106,7 @@ for solver in [MonteCarlo(), BayesianNetwork()]:
         eprint()
 
         print(
-            f'{{  "n": {num_nodes}, "mean": {str(np.mean(np.array(times)))}, "std": {str(np.std(np.array(times)))}, "times": {times} }},'
+            f'{{ "mode": {type(solver)}, "n": {num_nodes}, "mean": {str(np.mean(np.array(times)))}, "std": {str(np.std(np.array(times)))}, "times": {times} }},'
         )
         break
     print("]")

@@ -16,8 +16,8 @@ def main():
     with open("benches/mc.json", encoding="utf-8") as f:
         mc = json.load(f)
 
-    with open("benches/mcmc.json", encoding="utf-8") as f:
-        mcmc = json.load(f)
+    # with open("benches/mcmc.json", encoding="utf-8") as f:
+    #     mcmc = json.load(f)
 
     with open("benches/database.json", encoding="utf-8") as f:
         database = json.load(f)
@@ -38,7 +38,7 @@ def main():
         )
 
     plot_bench(mc, "MC")
-    plot_bench(mcmc, "MCMC")
+    # plot_bench(mcmc, "MCMC")
     plot_bench(database, "naive PDB")
     plot_bench(bn, "Bayesian Network")
     plot_bench(sdd, "WMC (SDD-based)")

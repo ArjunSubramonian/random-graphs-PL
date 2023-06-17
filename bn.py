@@ -4,6 +4,7 @@ from pgmpy.inference import VariableElimination
 import itertools
 import numpy as np
 
+
 class BayesianNetwork:
     def pr(self, G, use_cached=False):
         if not use_cached:
@@ -51,27 +52,36 @@ class BayesianNetwork:
                     edges.append((edge_node, tri_node))
 
             num_tri_nodes = len(tri_nodes)
-            sum_cpd = np.array([list(i) for i in itertools.product([0, 1], repeat=num_tri_nodes)])
+            sum_cpd = np.array(
+                [list(i) for i in itertools.product([0, 1], repeat=num_tri_nodes)]
+            )
             sum_cpd = sum_cpd.sum(axis=1)
             sum_cpd = np.eye(num_tri_nodes + 1)[sum_cpd].T
 
-            cpds['sum'] = TabularCPD(
-                    variable='sum',
-                    variable_card=num_tri_nodes + 1,
-                    values=sum_cpd.tolist(),
-                    evidence=tri_nodes,
-                    evidence_card=[2 for _ in range(num_tri_nodes)],
-                )
+            cpds["sum"] = TabularCPD(
+                variable="sum",
+                variable_card=num_tri_nodes + 1,
+                values=sum_cpd.tolist(),
+                evidence=tri_nodes,
+                evidence_card=[2 for _ in range(num_tri_nodes)],
+            )
             for tri_node in tri_nodes:
-                edges.append((tri_node, 'sum'))
+                edges.append((tri_node, "sum"))
 
             graph_model = BN(edges)
             graph_model.add_cpds(*list(cpds.values()))
             self.graph_infer = VariableElimination(graph_model)
-        
-        evidence = {
-            str(s) + "_" + str(t) : pos for (s, t), pos in G.observations
-        }
-        q = self.graph_infer.query(variables=['sum'], evidence=evidence)
+
+        evidence = {str(s) + "_" + str(t): pos for (s, t), pos in G.observations}
+        q = self.graph_infer.query(variables=["sum"], evidence=evidence)
         dist = dict(zip(list(range(len(q.values))), q.values))
         return dist
+
+    def observe_edge(self, G, s, t):
+        return G.observe_edge(s, t)
+
+    def observe_no_edge(self, G, s, t):
+        return G.observe_no_edge(s, t)
+
+    def observe_triangle(self, G, a, b, c):
+        return G.observe_triangle(a, b, c)

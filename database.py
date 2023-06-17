@@ -30,7 +30,7 @@ class ProbabilisticDatabase:
                 self.db[w] = (((1 - prob) * prob_og), world)
                 self.db.append(((prob * prob_og), new_world))
 
-    def pr(self, use_cached=False):
+    def pr(self, G, use_cached=False):
         dist = {}
         for w in range(len(self.db)):
             world_tri_total = 0
@@ -54,34 +54,36 @@ class ProbabilisticDatabase:
             values.append(int(key))
             ret_dist.append(dist[key])
         return dict(zip(values, ret_dist))
-    
-    def observe_edge(self, s, t):
-        normalize = 0
-        updated_db = []
-        for w in range(len(self.db)):
-            (wp, world) = self.db[w]
-            if ((s,t) in world) or ((t,s) in world):
-                normalize += wp
-                updated_db.append((wp,world))
-        self.db = []
-        for (wp,world) in updated_db:
-            self.db.append(((wp/normalize),world))
-    
-    def observe_no_edge(self, s, t):
-        normalize = 0
-        updated_db = []
-        for w in range(len(self.db)):
-            (wp, world) = self.db[w]
-            if ((s,t) not in world) and ((t,s) not in world):
-                normalize += wp
-                updated_db.append((wp,world))
-        self.db = []
-        for (wp,world) in updated_db:
-            self.db.append(((wp/normalize),world))
 
-    def observe_triangle(self, a, b, c):
+    def observe_edge(self, G, s, t):
+        normalize = 0
+        updated_db = []
+        for w in range(len(self.db)):
+            (wp, world) = self.db[w]
+            if ((s, t) in world) or ((t, s) in world):
+                normalize += wp
+                updated_db.append((wp, world))
+        self.db = []
+        for wp, world in updated_db:
+            self.db.append(((wp / normalize), world))
+
+    def observe_no_edge(self, G, s, t):
+        normalize = 0
+        updated_db = []
+        for w in range(len(self.db)):
+            (wp, world) = self.db[w]
+            if ((s, t) not in world) and ((t, s) not in world):
+                normalize += wp
+                updated_db.append((wp, world))
+        self.db = []
+        for wp, world in updated_db:
+            self.db.append(((wp / normalize), world))
+
+    def observe_triangle(self, G, a, b, c):
         if not self.undirected:
-            return ValueError("Triangle observations are only supported for undirected graphs.")
-        self.observe_edge(a, b)
-        self.observe_edge(b, c)
-        self.observe_edge(a, c)
+            return ValueError(
+                "Triangle observations are only supported for undirected graphs."
+            )
+        self.observe_edge(G, a, b)
+        self.observe_edge(G, b, c)
+        self.observe_edge(G, a, c)
