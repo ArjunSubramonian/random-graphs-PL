@@ -36,7 +36,7 @@ signal.signal(signal.SIGALRM, timeout_handler)
 for Solver in [
     MonteCarlo,
     BayesianNetwork,
-    # ProbabilisticDatabase
+    ProbabilisticDatabase
 ]:
     if Solver == BayesianNetwork:
         kwargs = {"use_cached": True}

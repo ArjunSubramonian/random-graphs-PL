@@ -1,3 +1,5 @@
+from random_graph import SampleableRandomGraph
+
 class ProbabilisticDatabase:
     def __init__(self, G):
         # set up the database and class variables
@@ -9,15 +11,15 @@ class ProbabilisticDatabase:
         db = [(1, [])]
         edges = []
         for src in G.out_adj_list.keys():
-            for tgt, prob in G.out_adj_list[src]:
+            for tgt in G.out_adj_list[src].keys():
                 # if directed, add every edge
                 if not G.undirected:
-                    edges.append((src, tgt, prob))
-                elif G.undirected and (tgt, src, prob) not in edges:
-                    edges.append((src, tgt, prob))
+                    edges.append((src, tgt, G.out_adj_list[src][tgt]))
+                elif G.undirected and (tgt, src, G.out_adj_list[src][tgt]) not in edges:
+                    edges.append((src, tgt, G.out_adj_list[src][tgt]))
 
         # populate the database and store the associated probabilties with each world
-        for src, tgt, prob in edges:
+        for (src, tgt, prob) in edges:
             world_count = len(self.db)
             for w in range(world_count):
                 (prob_og, world) = self.db[w]
